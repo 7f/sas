@@ -1,0 +1,159 @@
+原版TL-WR703N v1.6、TL-WR720N V3等TP-Link路由器（无需TTL、编程器、更改MAC地址）线刷不死uboot及升级uboot的简易教程
+https://www.coldawn.com/how-to-flash-u-boot-on-tp-link-tl-wr703nv1-6-tl-wr720nv3-without-ttl-programmer-mac-mod/
+
+于2015年12月4日由CD发布
+如果用得好好的，没事就别更新。
+更新
+
+20170429
+重写本文，解决无法更新uboot（64K更新为123K）的问题。
+20170313
+添加更新uboot到最新版的方法。
+20170310
+对TL-WR703N的支持情况
+可以使用pepe2k解锁固件（Barrier Breaker 14.07，r43286）刷入不死uboot的TL-WR703N的硬件版本为v1.0-v1.6，以及v1.7(Dec. 2012 (FW build 121204))。 
+理由如下： 
+OpenWrt介绍界面中，提示TP-LINK TL-WR703N的版本很多，但是看起来不同版本之间并没有硬件上的区别，所有版本均已被OpenWrt支持，如下表。
+OpenWrt对TL-WR703N支持表
+
+
+Version/Model	Launch Date	OpenWrt Version Supported	Model Specific Notes
+v1.0	August 2011	Trunk (r28294)	Confirmed working
+v1.2		Trunk (r29330)	Confirmed working
+v1.3		Trunk (r29283)	Confirmed working
+v1.5	December 2011	Trunk	Confirmed working
+v1.6	April 2012	Trunk (r39757)	Barrier Breaker, trunk (r39757) confirmed working
+v1.6(?)	March 2013 (FW build 130318)	BB(14.07)	AA confirmed working, BB too
+v1.6(?)	March 2013 (FW build 130321, original FW rel. 37153n)	Trunk(r41336)	AA confirmed working, BB too
+v1.6(?)	June 2013 (FW build 130625)	AA(12.09)	AA confirmed working
+v1.7	Dec. 2012 (FW build 121204)	AA(12.09)	AA confirmed working, trunk (r36641) broken
+v1.7	April 2014 (3.17.1 Build 140120 Rel.56593n)	Unsupported	trunk(r40351) not work
+v1.7	April 2014 (3.17.1 Build 140120 Rel.56593n)	Trunk (r45157)	confirmed working, Chaos Calmer, trunk (r45157)
+对于v1.7(April 2014 (3.17.1 Build 140120 Rel.56593n))，需要Chaos Calmer, trunk (r45157)来支持，所以不能用pepe2k解锁固件(r43286)来刷入不死uboot。
+在pepe2k的github中，支持的是TP-Link TL-WR703N v1和TP-Link TL-WR720N v3等，测试通过的本文中所使用的703n版本为v1.6，720n为v3。对于TL-WR703N，可以使用本方法的如上介绍请对照上面的表格，如版本不对，或自行更换过闪存、内存，请止步，以免浪费宝贵时间。
+
+以703n、720n为代表的TP-Link mini路由器，小巧便携，MicroUsb供电，带USB口，虽4M闪存，但可刷OpenWrt，挂载U盘，并将系统运行在U盘，为折腾带来无限可能。但是也很容易变砖，无法启动和刷入固件，自己修复起来比较麻烦，焊接TTL稍有不慎还可能彻底报废。通过修改启动代码，即uboot，实现开机时进入web刷机界面，可反复刷入各种固件，从而实现所谓的不死。
+
+本文介绍的U-Boot是pepe2k在github的开源项目，包含刷固件、U-Boot、ART等功能。更可贵的是pepe2k在发布的第二版（2014-11-19）中直接提供了解锁uboot的固件并且内置了写入U-Boot的脚本，使得操作变得十分方便又安全。
+pepe2k提供的解锁uboot固件是OpenWrt BB版，其中待刷入路由器的不死uboot的大小是64K。但现在pepe2k将uboot从64K扩展到了123K，却暂未针对新uboot提供更新后的OpenWrt。导致的问题是：写入64K的uboot后不能直接在不死uboot（192.168.1.1/uboot.html）中直接更新为123K的。如果想及时获取更新，那我们需要对写入uboot的过程进行修改。整体思路是：
+
++-------------------+           +--------------------+           +---------------+
+| 刷入解锁uboot固件 |    ==>    | 替换uboot和md5文件 |    ==>    | 写入新版uboot |
++-------------------+           +--------------------+           +---------------+
+
+请完整看完此文，再进行以下操作过程：
+
+一 获取所需的文件
+1.1 获取解锁uboot的OpenWrt固件
+（以Tp-Link TL-WR720N V3版为例，V4版能否使用不详，703N操作过程一样)
+在pepe2k的github下载页面，下载U-Boot_1.1.4_modification_for_routers_2014-11-19.tar.gz，解压，进入OpenWrt Barrier Breaker 14.07 images for easy U-Boot upgrade，在TP-Link TL-WR720N v3 CH下找到：
+
+openwrt-ar71xx-generic-tl-wr720n-v3-squashfs-factory.bin
+openwrt-ar71xx-generic-tl-wr720n-v3-squashfs-sysupgrade.bin
+md5sums
+请自行核对md5。
+
+1.2 获取新uboot和md5
+1.2.1 到pepe2k的FTP获取新uboot，计算md5并转换为小写：
+2017-04-29下载到的uboot为20170425版（请根据实际下载到的版本进行）：
+
+u-boot_mod__tp-link_tl-wr720n_v3_CN__20170425__git_master-aba8e6f8.bin
+79c6cebffc0bd913cef109fa62348f50
+1.2.2 为了避免不必要的麻烦，将新uboot和md5改名为2014-11-19固件中的名字（可用7Zip打开固件，定位到/etc/u-boot_mod/目录）：
+uboot_for_tp-link_tl-wr720n_v3_CH.bin
+uboot_for_tp-link_tl-wr720n_v3_CH.md5
+
+uboot_for_tp-link_tl-wr720n_v3_CH.md5文件内容根据实际情况改为：
+79c6cebffc0bd913cef109fa62348f50 *uboot_for_tp-link_tl-wr720n_v3_CH.bin
+二 刷入解锁uboot的OpenWrt固件
+为了减少出错，建议刷机前，将路由器恢复默认设置，以网线连接，并将上述长文件名固件改短，比如factory.bin和sysupgrade.bin，刷机过程中不要断电，直到路由器重启后指示灯稳定。
+注意：我们不少人已经有了不死uboot，但我们的目的是写入解锁uboot的固件，所以此时不要在不死uboot中写入这个固件。
+
+2.1 如果是Tp-Link的官方固件：
+在系统升级那里选择factory.bin并升级，不要保留设置。
+
+2.2 如果已经刷好了OpenWrt或者LEDE：
+2.2.1方法一：
+在 系统 > 升级 > 刷写新固件 那里选择sysupgrade.bin，同时去掉保留配置的钩，写入固件。
+
+2.2.2方法二：
+用WinSCP上传sysupgrade.bin到/tmp，并在putty中运行如下命令，并等待自动重启：
+
+mtd -r write /tmp/sysupgrade.bin firmware
+三 用新uboot（123K）替换原来的uboot（64K）
+3.1.1 设置密码开启SSH
+刷入固件路由器自动重启，待指示灯稳定后，以网线连接路由器和电脑，看电脑的有线网络图标是否连通，如自动获取IP失败，可手动修改有线网卡IP，比如192.168.1.103，网关为192.168.1.1，在命令行提示符中通过如下命令来设置密码以开启SSH：
+
+telnet 192.168.1.1
+passwd
+3.1.2 上传新uboot和md5文件到OpenWrt中
+用WinSCP将准备好的两个文件上传到/etc/u-boot_mod/，覆盖掉原来的文件。
+
+四 通过putty写入U-Boot
+可参见第一步解压出来的readme，使用putty登陆OpenWrt，看到OpenWrt的信息后，直接输入
+
+u-boot-upgrade
+然后按提示依次输入：
+
+
+=================================================================
+     DISCLAIMER: you are using this script at your own risk!
+
+     The author of U-Boot modification and this script takes
+     no responsibility for any of the results of using them.
+
+          Updating U-Boot is a very dangerous operation
+        and may damage your device! You have been warned!
+=================================================================
+   Are you sure you want to continue (type 'yes' or 'no')? yes
+=================================================================
+
+[ ok ] Found U-Boot image file: uboot_for_tp-link_tl-wr720n_v3_CH.bin
+       Do you want to use this file (type 'yes' or 'no')? yes
+[ ok ] MD5 checksum of new U-Boot image file is correct
+[ ok ] Backup of /dev/mtd0 successfully created
+       Do you want to store backup in /etc/u-boot_mod/backup/ (recommended, type 'yes' or 'no')? no
+[ ok ] New U-Boot image successfully combined with backup file
+[info] New U-Boot image is ready to be written into FLASH
+       Are you sure you want to continue (type 'yes' or 'no')? yes
+[ ok ] New U-Boot image successfully witten info FLASH
+[ ok ] MD5 checksum of mtd0 and new U-Boot image are equal
+[info] Done!
+以上三个意思是找到720N的uboot，验证md5正确询问是否备份旧的uboot，是否刷入新的U-Boot。
+看到Done！提示刷入不死U-Boot成功，reboot重启。U-Boot已经刷完。
+
+因为上述步骤的解锁U-Boot的固件是14.07，未安装luci，仅供刷入uboot使用，所以请按照“5.3 刷好U-Boot后如何使用？”进入web刷机界面（192.168.1.1/index.html）刷入自己感兴趣的固件。
+
+四 更新uboot
+pepe2k不停的努力为uboot带来令人兴奋的功能，并将升级版的uboot及时发布出来。可将下载的新版uboot，按“5.3 刷好U-Boot后如何使用？”进入uboot中（192.168.1.1/uboot.html）刷入即可。
+需要注意的是：按之前教程已经刷好（2014-11-19）版原始uboot（64K），在192.168.1.1/uboot.html中，是不能直接将64K的uboot更新为新版123K的。需要按本文教程重新来过。
+
+五 说明
+5.1 备份uboot
+除了上述半自动的写入U-Boot外，pepe2k在github上提供了手动写入教程，而且可以自己备份原来的uboot。pepe2k建议写入uboot前先备份原始的uboot。
+
+cat /dev/mtd0 > /tmp/uboot_backup.bin
+5.2 为什么这个uboot无需更改MAC地址？
+对于703N和720N等路由器来说，储存uboot的区块mtd0大小是128K，Tp-Link将uboot压缩到前64K，并在uboot区块剩下的64K内来存储MAC地址、pin码等信息。如果uboot修改软件未注意到这个问题或者为uboot加入了更多的功能导致占用空间过大，就可能会覆盖掉后面的信息，导致这些信息丢失，所以就需要手动修改MAC地址了。以TP-Link TL-MR3020来说，MAC地址、pin码等信息是写在最后1K内的，pepe2k可利用多达123K的空间可以用来写入uboot。对于703N来说，情况类似，pepe2k提供的uboot最大可利用前123K的空间，并且还保留了4K的空间供写入环境变量（like IP addresses of device and remote server for TFTP transaction, serial console baud rate, boot command, etc）。而pepe2k将uboot压缩在前64K并和原来后面64K的内容合并，重新刷回，相当于只是替换了前面的64K内容。所以不会导致MAC地址丢失。
+
+5.3 刷好U-Boot后如何使用？
+路由器断电，通过网线连接路由器和电脑，将电脑IP设为192.168.1.103或自动获取，按住reset键通电，继续按reset键3-4秒，然后松开会看到指示灯狂闪后熄灭，浏览器打开192.168.1.1并不断刷新，默认启动刷固件的页面：192.168.1.1/index.html。如需刷写art或者更新uboot，需相应进入192.168.1.1/art.html或者192.168.1.1/uboot.html。
+
+附：长按reset键的时间对应进入的功能模式：
+
+＃大于3秒并小于5秒，进入网页服务，用来更新固件、art、uboot。
+Web server (min. 3 seconds)
+＃大于5秒并小于7秒，进入串口控制台，假设你知道是干什么用的。
+U-Boot serial console (min. 5 seconds)
+＃大于7秒，进入网络控制台，假设你知道是干什么用的。
+U-Boot network console (min. 7 seconds)
+5.4 刷机界面是英文怎么办？
+虽然刷机界面是英文，但是只有一个选择固件的按钮和一个刷入的按钮，因此并不会对以后折腾刷机带来任何障碍。
+
+5.5 注意：
+5.5.1 在U-Boot中时指示灯是不亮的。
+5.5.2 以后需要重刷固件或者升级固件务必在不死U-Boot中进行，以免U-Boot被覆盖。
+5.5.3 一般情况下在U-Boot中刷入新固件后路由器会自动重启，但是在U-Boot中刷入sysupgrade固件时，可能会出现见UPDATE IN PROGRESS界面一直转圈圈的情况，建议等3分钟后，直接在浏览器中打开192.168.1.1看是否刷入成功。
+
+5.6 uboot之外的选择
+除了上述pepe2k的U-Boot外，还可以尝试hackpascal的Breed，支持更多，免费，但是不开源。对于只需用web界面刷固件折腾的人来说，pepe2k的U-Boot就足够了。
